@@ -11,7 +11,7 @@ models that this ends the string exactly on "(" (Mistral's [INST] template and
 Gemma's system-role-less template both behave the same way here).
 
 Base-checkpoint prompts (`plain_base` / `deceptive_base`) use no chat template
-and no first/second-person pronouns; see `docs/paper_map.md` and paper
+and no first/second-person pronouns; see the README and paper
 Appendix D.4 for why.
 """
 

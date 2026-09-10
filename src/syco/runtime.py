@@ -118,6 +118,6 @@ def load_npz(path):
     if not os.path.exists(path):
         raise SystemExit(
             f"Missing input: {path}\nRun the experiment that produces it first "
-            f"(see docs/paper_map.md for the order)."
+            f"(see the README for the run order)."
         )
     return np.load(path, allow_pickle=True)

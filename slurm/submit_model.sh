@@ -74,4 +74,4 @@ fi
 
 echo
 echo "Submitted. TriviaQA and the description condition need extra setup"
-echo "(dataset download and API calls); see docs/replication.md."
+echo "(dataset download and API calls); see the README."

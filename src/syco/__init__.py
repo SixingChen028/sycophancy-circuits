@@ -1,7 +1,7 @@
 """Mechanisms of sycophantic agreement in language models.
 
 Code for the paper "Tracing mechanisms of sycophantic agreement in language
-models". See docs/paper_map.md for the figure-to-command map.
+models". See the README for the figure-to-command map.
 """
 
 from .models import MODELS, ModelSpec, get_model_spec

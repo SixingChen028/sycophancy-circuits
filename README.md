@@ -1,131 +1,265 @@
-# Tracing mechanisms of sycophantic agreement in language models
+# Tracing Mechanisms of Sycophantic Agreement in Language Models
 
-Code for the paper. Sycophantic agreement is a model changing an otherwise
-correct answer to match a user's stated position. This repository contains the
-causal mediation analysis that locates the mechanism behind it.
+This repository contains code for the paper *Tracing Mechanisms of Sycophantic Agreement in Language Models*. We use causal mediation analysis to locate the components that carry a user's stated opinion in Llama-3.1-8B-Instruct, Mistral-7B-Instruct-v0.3 and Gemma-2-9B-it, and to show how that signal biases the model into abandoning an answer it would otherwise get right.
 
-**The result in one paragraph.** A stated opinion is written into the last
-prompt token's residual stream several layers *before* the model retrieves an
-answer, and it biases that retrieval. A sparse set of early attention heads
-carries the opinion signal; ablating them removes most sycophantic agreement
-while leaving factual accuracy largely intact. What those heads carry is a
-*reference* to the user's preferred answer rather than the answer itself: moved
-into an unrelated prompt, most of their effect disappears, unlike the answer
-retrieval heads. The same heads carry the opinion however it is phrased — by
-letter, in free-form text, in a second conversational turn, or as a description
-sharing no words with the answer. Content-free pushback ("Are you sure?")
-recruits a *different* set of heads, which suppress the model's original correct
-answer rather than promoting a stated one.
+## Overview
 
-Models studied: Llama-3.1-8B-Instruct, Mistral-7B-Instruct-v0.3, Gemma-2-9B-it,
-plus the Llama-3.1-8B base checkpoint for the before/after post-training
-comparison.
+**Core question:** Which components register a user's stated opinion, how does that signal bias the model's answer, and does the same mechanism hold across different forms of stated opinion?
 
-## Install
+**Approach:** We study factual question answering where a model answers correctly in isolation but switches once the user states a wrong answer. We patch activations from the plain run into the opinion run, layer by layer and then head by head, and measure the normalized logit difference. A label-swapped run, which changes the answer without stating any opinion, serves as the control that isolates generic answer retrieval. We then probe, ablate, and test generalization across five prompt formats.
+
+**Main findings:**
+- A stated opinion enters the last token's residual stream several layers before the model retrieves an answer
+- A sparse set of early attention heads carries the opinion; ablating them removes most sycophantic agreement while leaving plain accuracy largely intact
+- The same heads carry the opinion however it is phrased: by letter, in free-form text, in a second conversational turn, or as a description sharing no words with the answer
+- Those heads carry a *reference* to the user's answer rather than the answer content: transplanted into an unrelated prompt, about four fifths of their effect disappears
+- Content-free pushback ("Are you sure?") recruits a distinct set of heads that suppress the original correct answer instead of promoting a stated one
+
+## Repository Structure
+
+```
+.
+├── src/syco/
+│   ├── models.py                     # Model registry: HF id, answer token ids, head geometry, critical layer
+│   ├── prompts.py                    # Every prompt format in the paper
+│   ├── conditions.py                 # Source/target prompt pairs, one per condition
+│   ├── hooks.py                      # Activation caching, patching and ablation hooks
+│   ├── metrics.py                    # Normalized logit difference, answer rates
+│   ├── readout.py                    # 4-way (MMLU) and per-example 2-token (TriviaQA) read-outs
+│   ├── heads.py                      # Early/late band split, opinion and retrieval populations
+│   ├── data.py                       # Screened-example loading, sycophantic-answer selection
+│   ├── crossquestion.py              # Pairing and analysis for cross-question patching
+│   ├── triviaqa.py                   # Free-form answer normalization and matching
+│   ├── overlap.py                    # Word-level overlap checks for described opinions
+│   ├── llm.py                        # Anthropic API helper for the two dataset stages
+│   └── runtime.py                    # Model loading, batching, run-directory layout
+│
+├── scripts/
+│   ├── build_mmlu_dataset.py         # Download the 15 MMLU STEM subjects (Table 1)
+│   ├── build_triviaqa_dataset.py     # Download TriviaQA rc.nocontext validation split
+│   ├── generate_descriptions.py      # Generate referring descriptions (Boxes 1-2)
+│   └── judge_triviaqa_answers.py     # Validate constructed wrong answers (Boxes 3-4)
+│
+├── experiments/
+│   ├── screen_mmlu.py                # Step 1a: four screens on MMLU
+│   ├── screen_multiturn.py           # Step 1b: multi-round and pushback screens
+│   ├── screen_description.py         # Step 1c: description-based opinion screen
+│   ├── screen_triviaqa.py            # Step 1d: four-stage free-form screen
+│   ├── logit_lens.py                 # Step 2a: layer-by-layer answer probabilities
+│   ├── patch_residual_stream.py      # Step 2b: residual-stream patching by layer
+│   ├── patch_heads.py                # Step 3: per-head patching sweep
+│   ├── patch_heads_cumulative.py     # Step 4a: cumulative patching of opinion heads
+│   ├── ablate_heads.py               # Step 4b: individual and cumulative ablation
+│   ├── collect_writeins.py           # Step 4c: head write-in vectors, reduced by PCA
+│   ├── probe_answers.py              # Step 4d: answer probes (CPU)
+│   ├── patch_cross_question.py       # Step 5: cross-question patching
+│   └── induction_heads.py            # Step 6: prefix-matching and copying scores
+│
+├── figures/
+│   ├── style.py                      # Shared palette and figure helpers
+│   ├── fig3_depth.py                 # Fig. 3   Logit lens and residual-stream patching
+│   ├── fig4_heads.py                 # Fig. 4   Head heatmaps, probes, ablation
+│   ├── fig5_generalization.py        # Fig. 5   Cross-format correlations (and Fig. 6A)
+│   ├── fig6_pushback_probes.py       # Fig. 6B  Probes on pushback-only heads
+│   ├── figS1_screening_summary.py    # Fig. S1  Usable examples and sycophancy rates
+│   ├── figS4_induction.py            # Fig. S4  Induction-head criteria
+│   ├── figS5_cross_question.py       # Fig. S5  Cross-question patching
+│   └── figS6_base_vs_instruct.py     # Fig. S6  Base vs instruction-tuned checkpoint
+│
+├── slurm/
+│   ├── env.sh                        # Conda environment and HuggingFace cache
+│   ├── run.sh                        # One runner for every experiment
+│   └── submit_model.sh               # Submit the whole pipeline for one model
+│
+├── tests/                            # Unit tests plus an end-to-end run on a tiny random model
+├── docs/notes.md                     # Method details, caveats, adding a model
+├── data/                             # Datasets, produced by scripts/ (not committed)
+└── runs/                             # All experiment output (not committed)
+```
+
+## Setup
 
 ```bash
-git clone <this repository>
-cd sycophancy-circuits
 pip install -e .            # add '.[llm]' for the two dataset stages that call an API
 ```
 
-Llama and Gemma are gated on HuggingFace; run `huggingface-cli login` first.
-Every analysis runs on a single 48GB GPU with 8 CPU cores and 48–64GB of system
-memory, and no individual job exceeds four hours.
-
-## Quick start
+Llama and Gemma are gated on HuggingFace, so authenticate before the first download:
 
 ```bash
-python scripts/build_mmlu_dataset.py                          # download the questions
-python experiments/screen_mmlu.py       --model llama         # select usable questions
-python experiments/patch_heads.py       --model llama --condition mmlu
-python experiments/patch_heads.py       --model llama --condition mmlu_label_swap
-python figures/fig4_heads.py            --model llama
+huggingface-cli login
 ```
 
-On a cluster, `bash slurm/submit_model.sh llama` submits the whole pipeline with
-the dependencies between stages already wired up.
+The reported runs used a single 48GB NVIDIA L40S GPU with 8 CPU cores and 48–64GB of system memory, with all models loaded in bfloat16. No individual job exceeded four hours.
 
-## How the code is organized
-
-Every causal experiment in the paper has the same shape: run the model on a
-**source** prompt where it answers correctly, run it on a **target** prompt where
-it answers differently, patch a component from source into target, and measure
-how far the answer moves back. Conditions differ only in which two prompts those
-are and how the answer is read out. So each analysis is one script, and the
-model and the condition are arguments:
+## Datasets
 
 ```bash
-python experiments/patch_heads.py --model gemma --condition mmlu_multiturn
+python scripts/build_mmlu_dataset.py        # -> data/mmlu_stem.json (2,476 questions)
+python scripts/build_triviaqa_dataset.py    # -> data/triviaqa.json  (9,960 questions)
 ```
 
-| Path | What it holds |
-|---|---|
-| `src/syco/models.py` | Model registry: HF id, answer token ids, head geometry, critical layer |
-| `src/syco/prompts.py` | Every prompt format in the paper |
-| `src/syco/conditions.py` | The source/target prompt pairs, one per condition |
-| `src/syco/crossquestion.py` | Pairing and analysis for cross-question patching |
-| `src/syco/hooks.py` | Caching, patching and ablation hooks |
-| `src/syco/metrics.py` | Normalized logit difference and answer rates |
-| `experiments/` | One script per analysis, parameterized by model and condition |
-| `scripts/` | Dataset construction (two stages call the Anthropic API) |
-| `figures/` | One script per paper figure |
-| `slurm/` | Cluster runner and a whole-pipeline submitter |
-| `tests/` | Unit tests plus an end-to-end run on a tiny random model |
+The description-based condition additionally needs generated descriptions. These are model-agnostic and generated once, so set `ANTHROPIC_API_KEY` first:
 
-Adding a model means adding one entry to `MODELS`. Adding a condition means
-adding one `Condition` with two prompt builders. Neither requires touching any
-analysis.
-
-### Output layout
-
-Everything a run produces lands under `runs/<model>/<condition>/`, so a complete
-replication is one directory and nothing is written anywhere else. Set
-`SYCO_RUNS` to relocate it.
-
-```
-runs/llama/mmlu/
-    screened_examples.json          screening (experiments/screen_mmlu.py)
-    logit_lens.npz                  Figure 3A
-    residual_patching.npz           Figure 3B
-    head_patching.npz               Figures 4A, 4B
-    head_patching_cumulative.npz    Figure S2
-    head_ablation.npz               Figures 4F, S3
-    writeins.npz, answer_probes.npz Figures 4D, 4E
-
-runs/llama/triviaqa/
-    cross_question_dec.npz          reference-vs-content sweep     Figure S5
-    cross_question_plain.npz        optional no-opinion control arm
+```bash
+python scripts/generate_descriptions.py --limit 50   # pilot, check the attrition rate
+python scripts/generate_descriptions.py              # full run, 7,428 descriptions
 ```
 
-## Conditions
+## Reproducing Results
 
-| `--condition` | Source | Target | Paper |
-|---|---|---|---|
-| `mmlu` | plain | opinion names an option by letter | Fig 3, 4 |
-| `mmlu_label_swap` | plain | correct and wrong options exchange letters | Fig 3B, 4A |
-| `mmlu_content_swap` | plain | correct and wrong options exchange text | Fig 4E |
-| `triviaqa` | plain | opinion states a free-form wrong answer | Fig 5A |
-| `mmlu_multiturn` | round 1 | round 2 after a stated opinion | Fig 5B |
-| `mmlu_description` | plain | opinion describes the option, sharing no words | Fig 5C |
-| `mmlu_pushback` | round 1 | round 2 after content-free doubt | Fig 6 |
-| `mmlu_base` / `mmlu_base_matched` | plain | wrong answer asserted as fact | Fig S5 |
+Every experiment takes `--model` and, where relevant, `--condition`. All output is written to `runs/<model>/<condition>/`, so one replication is one directory.
 
-One analysis does not fit that table. **Cross-question patching**
-(`experiments/patch_cross_question.py`, paper Appendix D.4) pairs each TriviaQA
-question with a *different* one and patches between them, to ask whether an
-opinion head carries a context-dependent reference or transferable answer
-content. It has its own pairing and read-out, described in
-`src/syco/crossquestion.py`.
+| `--model` | Checkpoint |
+|-----------|------------|
+| `llama` | meta-llama/Llama-3.1-8B-Instruct |
+| `mistral` | mistralai/Mistral-7B-Instruct-v0.3 |
+| `gemma` | google/gemma-2-9b-it |
+| `llama-base` | meta-llama/Llama-3.1-8B |
 
-The two swap conditions state **no opinion at all**. They move the answer for a
-reason unrelated to sycophancy, which is what makes them the control that
-isolates generic answer retrieval from opinion processing.
+| `--condition` | Source run | Target run |
+|---------------|-----------|------------|
+| `mmlu` | plain | opinion names an option by letter |
+| `mmlu_label_swap` | plain | correct and wrong options exchange letters |
+| `mmlu_content_swap` | plain | correct and wrong options exchange text |
+| `triviaqa` | plain | opinion states a free-form wrong answer |
+| `mmlu_multiturn` | round 1 | round 2 after a stated opinion |
+| `mmlu_description` | plain | opinion describes the option, sharing no words |
+| `mmlu_pushback` | round 1 | round 2 after content-free doubt |
+| `mmlu_base` / `mmlu_base_matched` | plain | wrong answer asserted as fact |
 
-## Documentation
+The two swap conditions state no opinion. They move the answer for a reason unrelated to sycophancy, which is what makes them the control that isolates answer retrieval.
 
-- [`docs/replication.md`](docs/replication.md) — full run order, costs, cluster notes
-- [`docs/paper_map.md`](docs/paper_map.md) — every figure and table, and the command that produces it
+On a cluster, `bash slurm/submit_model.sh llama` submits everything below with the dependencies between stages already wired up.
+
+### Step 1 — Screening
+
+Selects questions the model answers correctly, resolves from the option text rather than the letter, and is flipped by a stated opinion (Appendix A).
+
+```bash
+python experiments/screen_mmlu.py       --model llama
+python experiments/screen_multiturn.py  --model llama --mode stated
+python experiments/screen_multiturn.py  --model llama --mode pushback
+python experiments/screen_description.py --model llama
+```
+
+TriviaQA has no fixed option set, so the wrong answer is constructed from the model's own next-best guess and validated by an LLM judge (Appendix A.3):
+
+```bash
+python experiments/screen_triviaqa.py --model llama --stage plain
+python experiments/screen_triviaqa.py --model llama --stage guess
+python scripts/judge_triviaqa_answers.py --model llama    # needs ANTHROPIC_API_KEY
+python experiments/screen_triviaqa.py --model llama --stage opinion
+python experiments/screen_triviaqa.py --model llama --stage build
+```
+
+**Output:** `runs/<model>/<condition>/screened_*.json`
+
+### Step 2 — Locating the Depth
+
+```bash
+python experiments/logit_lens.py            --model llama --condition mmlu
+python experiments/patch_residual_stream.py --model llama --condition mmlu
+python experiments/patch_residual_stream.py --model llama --condition mmlu_label_swap
+```
+
+**Output:** `logit_lens.npz`, `residual_patching.npz` → Figure 3
+
+### Step 3 — Per-Head Patching
+
+The main sweep, run once per condition. It is `n_layers × n_heads × ceil(N/batch)` forward passes, 2–4 hours per condition, and checkpoints after every layer — resubmit the identical command to resume.
+
+```bash
+for CONDITION in mmlu mmlu_label_swap mmlu_content_swap triviaqa \
+                 mmlu_multiturn mmlu_description mmlu_pushback; do
+    python experiments/patch_heads.py --model llama --condition $CONDITION
+done
+```
+
+**Output:** `head_patching.npz` → Figures 4A, 4B, 5, 6A
+
+### Step 4 — Ablation and Probing
+
+```bash
+python experiments/patch_heads_cumulative.py --model llama --condition mmlu
+python experiments/ablate_heads.py           --model llama --condition mmlu
+python experiments/collect_writeins.py       --model llama --condition mmlu
+python experiments/probe_answers.py          --model llama --condition mmlu   # CPU
+```
+
+`collect_writeins.py` needs the `mmlu`, `mmlu_label_swap` and `mmlu_content_swap` sweeps: answer retrieval heads are scored across both relabelling conditions. Repeat the last two with `--condition mmlu_pushback` for Figure 6B.
+
+**Output:** `head_ablation.npz`, `head_patching_cumulative.npz`, `writeins.npz`, `answer_probes.npz` → Figures 4D–4F, 6B, S2, S3
+
+### Step 5 — Cross-Question Patching
+
+Patches a head from one TriviaQA question's run into an unrelated question's run, to test whether it carries a context-dependent reference or transferable answer content (Appendix D.4).
+
+```bash
+python experiments/patch_cross_question.py --model llama --source_arm dec --seed 0
+```
+
+An optional control arm (`--source_arm plain`, same seed) isolates what the source's opinion contributed from generic cross-context disruption. The paper's figure needs only the deceptive arm.
+
+**Output:** `cross_question_dec.npz` → Figure S5
+
+### Step 6 — Induction-Head Criteria
+
+Computes prefix-matching and copying scores for every head on repeated random tokens. Needs no dataset and runs in minutes.
+
+```bash
+python experiments/induction_heads.py --model llama
+```
+
+**Output:** `runs/<model>/induction/induction_heads.npz` → Figure S4
+
+### Base vs Instruction-Tuned
+
+The base checkpoint has no chat template and no assistant persona, so the opinion is stated as a bare assertion of fact, and the instruct model is re-run with that same phrasing (Appendix D.5).
+
+```bash
+python experiments/screen_mmlu.py  --model llama-base --format base
+python experiments/screen_mmlu.py  --model llama      --format pronoun_free
+python experiments/patch_heads.py  --model llama-base --condition mmlu_base
+python experiments/patch_heads.py  --model llama      --condition mmlu_base_matched
+python experiments/patch_heads.py  --model llama-base --condition mmlu_label_swap
+```
+
+## Figures
+
+Each script reads the `.npz` files from `runs/` and writes PDFs and PNGs to `figures/output/<model>/`. Panels whose inputs are missing are skipped rather than aborting the run.
+
+| Script | Figure | Description |
+|--------|--------|-------------|
+| `fig3_depth.py` | Fig. 3 | Logit lens and residual-stream patching by layer |
+| `fig4_heads.py` | Fig. 4, S3 | Head heatmaps, condition scatter, answer probes, ablation |
+| `fig5_generalization.py` | Fig. 5, 6A | Early-head correlations across prompt formats |
+| `fig6_pushback_probes.py` | Fig. 6B | Answer probes on pushback-only heads |
+| `figS1_screening_summary.py` | Fig. S1 | Usable examples and sycophancy rates across models |
+| `figS4_induction.py` | Fig. S4 | Induction-head criteria |
+| `figS5_cross_question.py` | Fig. S5 | Cross-question patching, reference vs content |
+| `figS6_base_vs_instruct.py` | Fig. S6 | Opinion and retrieval heads before and after tuning |
+
+```bash
+python figures/fig3_depth.py --model llama
+python figures/figS1_screening_summary.py --models llama mistral gemma
+```
+
+Mistral's Figures S7–S12 and Gemma's S13–S18 are the same scripts with `--model mistral` / `--model gemma`.
+
+## Adding a Model
+
+Add one entry to `MODELS` in `src/syco/models.py`; no analysis code changes.
+
+```python
+"my-model": ModelSpec(
+    key="my-model",
+    hf_id="org/my-model",
+    answer_ids=(...),          # token ids of bare "A", "B", "C", "D"
+    n_layers=..., n_heads=..., d_head=..., critical_layer=...,
+),
+```
+
+`answer_ids` are not portable across tokenizers and are re-derived and checked at load time. `d_head` is the width of one head's slice of the `o_proj` input, which is not always `hidden_size // n_heads` — Gemma-2 sets `head_dim=256` explicitly. `critical_layer` is the last layer at which the median plain-to-label-swap normalized logit difference stays below 0.1 (Appendix B.1); run Step 2 first to read it off the curve. See [`docs/notes.md`](docs/notes.md) for details.
 
 ## Tests
 
@@ -133,18 +267,8 @@ isolates generic answer retrieval from opinion processing.
 pytest tests
 ```
 
-The suite covers the prompt formats as golden strings, the metrics, and the
-intervention hooks — the last against invariants on a small real transformer,
-including that patching the final layer's residual stream reproduces the source
-run's logits exactly, and that per-head write-ins sum to the attention output.
-`tests/test_pipeline.py` runs each experiment end to end on a tiny random model.
+The suite pins the prompt formats as golden strings, checks the metrics, and verifies the intervention hooks against invariants on a small real transformer — including that patching the final layer's residual stream reproduces the source run's logits exactly. `tests/test_pipeline.py` runs each experiment end to end on a tiny random model.
 
 ## Citation
 
-```bibtex
-@article{sycophancy-circuits,
-  title  = {Tracing mechanisms of sycophantic agreement in language models},
-  year   = {2026},
-  note   = {Preprint, under review}
-}
-```
+If you use this code, please cite our paper (citation to be added upon publication).
