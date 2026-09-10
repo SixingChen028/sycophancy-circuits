@@ -30,7 +30,6 @@ Output: runs/<model>/triviaqa/{plain_answers,second_guess,opinion_screen,
                                screened_examples}.json
 """
 
-import argparse
 import json
 import os
 import sys

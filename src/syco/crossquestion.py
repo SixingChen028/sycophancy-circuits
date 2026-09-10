@@ -68,18 +68,13 @@ import os
 import numpy as np
 
 __all__ = [
-    "READOUTS", "READOUT_LABELS", "TARGET_CORRECT", "TARGET_OPINION",
+    "READOUTS", "TARGET_CORRECT", "TARGET_OPINION",
     "SOURCE_OPINION", "MAX_GUESS_WORDS",
     "make_pairs", "load_arm", "load_arms", "delta_log_prob", "per_head_effect",
     "population_summary", "bootstrap_ci",
 ]
 
 READOUTS = ("c_t", "w_t", "w_s")
-READOUT_LABELS = (
-    "c_t (target's correct answer)",
-    "w_t (target's stated opinion)",
-    "w_s (source's stated opinion)",
-)
 TARGET_CORRECT, TARGET_OPINION, SOURCE_OPINION = 0, 1, 2
 
 # Beam search occasionally returns a garbled multi-clause string instead of a

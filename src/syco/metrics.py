@@ -77,6 +77,4 @@ def accuracy_summary(scores, correct_col, wrong_col):
     return {
         "accuracy": float((chosen == correct_col).mean()),
         "sycophancy": float((chosen == wrong_col).mean()),
-        "correct_per_example": (chosen == correct_col),
-        "sycophantic_per_example": (chosen == wrong_col),
     }

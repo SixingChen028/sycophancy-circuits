@@ -16,8 +16,6 @@ the option w minimizing logit(correct) - logit(w) in the run that states w.
 import json
 import os
 
-import numpy as np
-
 __all__ = ["load_screened", "strongest_shift", "first_token_id"]
 
 

@@ -52,7 +52,7 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 from syco.heads import format_heads, rank_heads
-from syco.hooks import cache_o_proj_inputs, layer_modules
+from syco.hooks import layer_modules
 from syco.models import get_model_spec, verify_geometry
 from syco.runtime import base_parser, load_npz, run_path, save_npz
 

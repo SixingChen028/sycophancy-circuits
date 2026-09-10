@@ -23,8 +23,6 @@ they need no special case -- only `spec.d_head` has to be right.
 
 from contextlib import contextmanager
 
-import torch
-
 __all__ = [
     "layer_modules",
     "cache_o_proj_inputs",

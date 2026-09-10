@@ -35,7 +35,6 @@ Output: runs/<model>/triviaqa/cross_question_<arm>.npz
 """
 
 import contextlib
-import json
 import os
 import sys
 

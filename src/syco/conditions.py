@@ -31,7 +31,7 @@ has nothing to do with sycophancy; that is what makes them the control that
 isolates generic answer retrieval.
 """
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
 
 import numpy as np
 

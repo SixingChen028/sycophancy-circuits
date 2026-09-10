@@ -34,8 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from syco.conditions import get_condition
 from syco.heads import format_heads, opinion_population, retrieval_population
 from syco.hooks import cache_o_proj_inputs, head_writein
-from syco.runtime import (base_parser, batches, load_model, load_npz, run_path,
-                          save_npz)
+from syco.runtime import (base_parser, batches, load_model, run_path, save_npz)
 
 
 def collect(model, tok, prompts, spec, heads, device, batch_size, label):
