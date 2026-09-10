@@ -2,19 +2,6 @@
 
 This repository contains code for the paper *Tracing Mechanisms of Sycophantic Agreement in Language Models*. We use causal mediation analysis to locate the components that carry a user's stated opinion in Llama-3.1-8B-Instruct, Mistral-7B-Instruct-v0.3 and Gemma-2-9B-it, and to show how that signal biases the model into abandoning an answer it would otherwise get right.
 
-## Overview
-
-**Core question:** Which components register a user's stated opinion, how does that signal bias the model's answer, and does the same mechanism hold across different forms of stated opinion?
-
-**Approach:** We study factual question answering where a model answers correctly in isolation but switches once the user states a wrong answer. We patch activations from the plain run into the opinion run, layer by layer and then head by head, and measure the normalized logit difference. A label-swapped run, which changes the answer without stating any opinion, serves as the control that isolates generic answer retrieval. We then probe, ablate, and test generalization across five prompt formats.
-
-**Main findings:**
-- A stated opinion enters the last token's residual stream several layers before the model retrieves an answer
-- A sparse set of early attention heads carries the opinion; ablating them removes most sycophantic agreement while leaving plain accuracy largely intact
-- The same heads carry the opinion however it is phrased: by letter, in free-form text, in a second conversational turn, or as a description sharing no words with the answer
-- Those heads carry a *reference* to the user's answer rather than the answer content: transplanted into an unrelated prompt, about four fifths of their effect disappears
-- Content-free pushback ("Are you sure?") recruits a distinct set of heads that suppress the original correct answer instead of promoting a stated one
-
 ## Repository Structure
 
 ```
@@ -72,7 +59,6 @@ This repository contains code for the paper *Tracing Mechanisms of Sycophantic A
 │   └── submit_model.sh               # Submit the whole pipeline for one model
 │
 ├── tests/                            # Unit tests plus an end-to-end run on a tiny random model
-├── docs/notes.md                     # Method details, caveats, adding a model
 ├── data/                             # Datasets, produced by scripts/ (not committed)
 └── runs/                             # All experiment output (not committed)
 ```
@@ -245,29 +231,6 @@ python figures/figS1_screening_summary.py --models llama mistral gemma
 ```
 
 Mistral's Figures S7–S12 and Gemma's S13–S18 are the same scripts with `--model mistral` / `--model gemma`.
-
-## Adding a Model
-
-Add one entry to `MODELS` in `src/syco/models.py`; no analysis code changes.
-
-```python
-"my-model": ModelSpec(
-    key="my-model",
-    hf_id="org/my-model",
-    answer_ids=(...),          # token ids of bare "A", "B", "C", "D"
-    n_layers=..., n_heads=..., d_head=..., critical_layer=...,
-),
-```
-
-`answer_ids` are not portable across tokenizers and are re-derived and checked at load time. `d_head` is the width of one head's slice of the `o_proj` input, which is not always `hidden_size // n_heads` — Gemma-2 sets `head_dim=256` explicitly. `critical_layer` is the last layer at which the median plain-to-label-swap normalized logit difference stays below 0.1 (Appendix B.1); run Step 2 first to read it off the curve. See [`docs/notes.md`](docs/notes.md) for details.
-
-## Tests
-
-```bash
-pytest tests
-```
-
-The suite pins the prompt formats as golden strings, checks the metrics, and verifies the intervention hooks against invariants on a small real transformer — including that patching the final layer's residual stream reproduces the source run's logits exactly. `tests/test_pipeline.py` runs each experiment end to end on a tiny random model.
 
 ## Citation
 
