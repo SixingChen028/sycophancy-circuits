@@ -21,10 +21,6 @@ dependencies = [
 [project.optional-dependencies]
 # Only the two dataset-construction stages that call the Anthropic API.
 llm = ["anthropic>=0.40"]
-dev = ["pytest>=7.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]

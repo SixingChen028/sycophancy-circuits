@@ -58,7 +58,6 @@ This repository contains code for the paper *Tracing Mechanisms of Sycophantic A
 │   ├── run.sh                        # One runner for every experiment
 │   └── submit_model.sh               # Submit the whole pipeline for one model
 │
-├── tests/                            # Unit tests plus an end-to-end run on a tiny random model
 ├── data/                             # Datasets, produced by scripts/ (not committed)
 └── runs/                             # All experiment output (not committed)
 ```
